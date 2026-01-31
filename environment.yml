@@ -1,0 +1,17 @@
+name: gee-ndvi
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - tqdm
+  - pyproj
+  - gdal
+  - shapely
+  - geopandas
+  - pandas
+  - matplotlib
+  - python-dateutil
+  - pyyaml
+  - earthengine-api
+  - fiona

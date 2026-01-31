@@ -1,0 +1,25 @@
+# PyCharm
+.idea/
+
+# Outputs
+runs/
+ndvi_run/
+plots/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Geo/EO outputs (keep if you generate these)
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.cpg
+*.prj
+*.tif
+*.tiff
+*.vrt

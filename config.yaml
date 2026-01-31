@@ -1,0 +1,77 @@
+workdir: "./"
+
+# Optional EE cloud project (GCP project id). Leave empty if not needed.
+gee_project: ""
+
+# Input locations (resolved relative to workdir if not absolute)
+locations_path: "locations.csv"
+locations_type: "auto"     # auto | csv | vector
+input_epsg: 4326
+
+id_col: "SITE_ID"
+csv_x_col: "X"
+csv_y_col: "Y"
+csv_wkt_col: ""
+vector_layer: ""
+
+# Save loaded locations (written into run folder if relative)
+save_locations_gpkg: true
+locations_gpkg_out: "locations_loaded.gpkg"
+locations_gpkg_layer: "sites"
+location_chunk_size: 0
+
+tutorial: false
+dummy_out: "dummy_locations.csv"
+
+start: "2016-01-01"
+end: "2026-01-01"
+unit: "month"
+step: 1
+
+# Temporal aggregation across images in each timestep window
+agg: "median"              # mean | median
+
+scale: 10
+cloud_pct: 60
+nodata: -9999.0
+
+# Output CSV (written into run folder if relative)
+out_csv: "ndvi_timeseries.csv"
+
+# --- Unique runs ---
+use_run_dir: true
+run_root: "runs"
+run_id: "auto"             # auto => YYYYMMDD_HHMMSS
+
+# --- Plotting ---
+# Plot type: "line" (time series), "box" (distributions), or "both"
+plot_type: "both"            # line | box | both
+compute_box_stats: "auto"
+
+# Aesthetics
+boxplot_alpha: 0.35
+
+plot: true
+plot_mode: "save"          # save | show
+plot_dir: "plots"
+plot_format: "png"
+
+# Combined plot (all sites in one figure)
+plot_combined: true
+plot_combined_filename: "ndvi_all_sites.png"
+
+# Ribbon (per-site plots): NDVI ± NDVI_SD
+plot_ribbon: true
+ribbon_source: "auto"
+ribbon_multiplier: 1.0     # 1.0 => ±1 SD, 2.0 => ±2 SD
+# Ribbon transparency
+ribbon_alpha_site: 0.18
+ribbon_alpha_combined: 0.08
+
+# --- Nodata / invalid handling ---
+mask_nodata_in_df: true
+mask_invalid_ndvi: true
+
+sd_source: "auto"          # auto|temporal|spatial|none
+compute_spatial_sd: false  # set true only for polygons if you want NDVI_SD_SPAT
+
