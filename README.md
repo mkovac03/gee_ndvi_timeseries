@@ -8,29 +8,47 @@ This repository provides a config-driven Python script to extract Sentinel-2 NDV
 
 For each location and each time window (e.g., monthly), the script:
 
-1. Loads Sentinel-2 Surface Reflectance imagery: `COPERNICUS/S2_SR_HARMONIZED`
-2. Applies cloud masking using:
+1) Loads Sentinel-2 Surface Reflectance imagery: `COPERNICUS/S2_SR_HARMONIZED`
+2) Applies cloud masking using:
+   - QA60 (cloud + cirrus bits)
+   - SCL masking to remove problematic classes
+3) Computes NDVI per image:
+   - `NDVI = (B8 − B4) / (B8 + B4)`
+4) Aggregates within each time window (temporal aggregation):
+   - `agg: mean`   → NDVI mean + temporal **SD**
+   - `agg: median` → NDVI median + temporal **MAD**
 
-   * QA60 (cloud + cirrus bits)
-   * SCL masking to remove problematic classes
-3. Computes NDVI per image:
+**What SD and MAD mean here (temporal variability within the interval):**
 
-   * `NDVI = (B8 − B4) / (B8 + B4)`
-4. Aggregates within each time window (temporal aggregation):
+For a given location and a given time window, the script considers the set of NDVI values from all Sentinel‑2 images that pass filtering and masking in that window:
 
-   * `agg: mean`   → NDVI mean + temporal **SD**
-   * `agg: median` → NDVI median + temporal **MAD**
-5. Aggregates over the geometry (spatial aggregation):
+- NDVI values: x1, x2, …, xn
 
-   * points: NDVI at the point (scale-dependent)
-   * polygons: NDVI over the polygon (reduced over pixels within the polygon)
-6. Optionally computes per-window temporal percentiles for interval “boxplots”:
+If `agg: mean`, the central value is the mean μ:
 
-   * P05/P25/P50/P75/P95
+- μ = (1/n) * Σ xi
+- Temporal standard deviation SD = sqrt( (1/(n−1)) * Σ (xi − μ)^2 )
+
+If `agg: median`, the central value is the median m:
+
+- m = median(x1, x2, …, xn)
+- Temporal median absolute deviation MAD = median( |xi − m| for i = 1..n )
+
+
+Interpretation:
+
+- The exported `NDVI` is the **central tendency** for that window (mean or median).
+- The exported SD (mean case) or MAD (median case) is the **temporal spread/variability inside that same window**, i.e., how much NDVI fluctuates across the set of images within the interval at that location (after cloud masking).
+5) Aggregates over the geometry (spatial aggregation):
+   - points: NDVI at the point (scale-dependent)
+   - polygons: NDVI over the polygon (reduced over pixels within the polygon)
+6) Optionally computes per-window temporal percentiles for interval “boxplots”:
+   - P05/P25/P50/P75/P95
 
 Output is a CSV with one row per `(SITE_ID, time window)` plus optional plots.
 
 ---
+
 
 ## Repository structure
 
@@ -113,10 +131,39 @@ gee_project: ""
 
 The script supports:
 
-* CSV (points)
-* Vector files: `.shp`, `.gpkg`, `.geojson`
+- CSV (points)
+- Vector files: `.shp`, `.gpkg`, `.geojson`
 
 All inputs are reprojected internally to EPSG:4326 because GEE expects lon/lat.
+
+### If `locations_path` is missing (dummy locations / tutorial run)
+
+If the file specified by `locations_path` does not exist, the script can run in a tutorial mode using a small built-in set of dummy point locations.
+
+Behavior:
+
+- If `tutorial: true` in `config.yaml`:
+  - the script automatically writes a dummy CSV to the current run folder (filename controlled by `dummy_out`)
+  - and uses those dummy locations as input
+
+- If `tutorial: false`:
+  - the script prompts in the terminal:
+    - `Locations not found. Would you like to run the script in tutorial mode with dummy locations? [y/N]`
+  - If you type `y`, it will generate and use the dummy locations for that run.
+  - If you type `N` (or press Enter), the script exits with an error.
+
+Dummy locations created by the script (EPSG:4326 lon/lat):
+- `forest_gribskov`
+- `cropland_lammefjorden`
+- `wetland_lille_vildmose`
+
+Relevant config keys:
+
+```yaml
+locations_path: "locations.csv"
+tutorial: false
+dummy_out: "dummy_locations.csv"
+
 
 ### A) CSV points
 
@@ -311,19 +358,87 @@ Optional (when box stats enabled):
 
 ## Running an extraction
 
-1. Put a locations file in the repo folder (e.g., `locations.csv`)
-2. Edit `config.yaml` (time range, unit/step, agg, plot_type, etc.)
-3. Run:
+Recommended first run (sanity check):
+
+1. Do not provide any locations file yet (leave `locations_path` pointing to a non-existent file, e.g. `locations.csv`).
+2. Set tutorial mode in `config.yaml` so the script generates the built-in dummy locations:
+
+```yaml
+tutorial: true
+```
+
+3. For a fast first test, set the time period to a single year:
+
+```yaml
+start: "2020-01-01"
+end:   "2021-01-01"
+unit: "month"
+step: 1
+```
+
+4. Run:
 
 ```bash
 python gee_ndvi_timeseries.py
 ```
 
+5. Inspect what the script produced in the new run folder:
+
+- `runs/YYYYMMDD_HHMMSS/run.log` (all printouts + any errors)
+- `runs/YYYYMMDD_HHMMSS/config_used.json` (the exact config used)
+- `runs/YYYYMMDD_HHMMSS/plots/` (plots)
+- `runs/YYYYMMDD_HHMMSS/ndvi_timeseries.csv` (output table)
+
+Notes on plots:
+
+- Line plots show the NDVI time series for each site (and optional ribbons showing temporal spread).
+- Boxplots summarize the within-window temporal variation using percentiles (P05/P25/P50/P75/P95) computed from all images in each window.
+- With `plot_type: both`, you can compare what the line plot emphasizes (central tendency over time) versus what the boxplot emphasizes (distribution within each time window).
+
+Second run (compare median vs mean):
+
+6. Change the aggregation method from `median` to `mean`:
+
+```yaml
+agg: "mean"
+```
+
+7. Run the script again:
+
+```bash
+python gee_ndvi_timeseries.py
+```
+
+8. Compare the two run folders:
+
+- In the `median` run, the uncertainty/spread metric is MAD.
+- In the `mean` run, the uncertainty/spread metric is SD.
+- Compare how the line plot values and the ribbon widths differ between the two runs.
+- Compare how the boxplot percentiles and spreads differ (if enabled).
+
+Full decade run (longer profiles):
+
+9. Expand the time range to a full decade:
+
+```yaml
+start: "2016-01-01"
+end:   "2026-01-01"
+```
+
+10. Run again:
+
+```bash
+python gee_ndvi_timeseries.py
+```
+
+11. Inspect the decade-scale temporal profiles (seasonality, interannual variability, and how spread changes through time).
+
 Outputs will be in:
 
-* `runs/YYYYMMDD_HHMMSS/`
+- `runs/YYYYMMDD_HHMMSS/`
 
 ---
+
 
 ## Troubleshooting notes
 
